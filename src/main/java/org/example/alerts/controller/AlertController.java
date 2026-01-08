@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.alerts.constant.HeaderConstants;
 import org.example.alerts.dto.request.AlertRequest;
 import org.example.alerts.dto.response.AlertResponse;
+import org.example.alerts.exception.SessionNotFoundException;
 import org.example.alerts.model.Session;
 import org.example.alerts.service.AlertService;
 import org.example.alerts.service.SessionService;
@@ -40,11 +41,6 @@ public class AlertController {
         // Record interaction in session
         sessionService.recordInteraction(activeSessionId, request, response);
 
-        // Mark session as completed if alerts list is empty
-        if (response.getAlerts() == null || response.getAlerts().isEmpty()) {
-            sessionService.completeSession(activeSessionId);
-        }
-
         // Add session ID to response headers
         HttpHeaders headers = new HttpHeaders();
         headers.add(HeaderConstants.SESSION_ID_HEADER, activeSessionId);
@@ -54,9 +50,15 @@ public class AlertController {
 
     private String determineSessionId(String sessionId) {
         if (StringUtils.hasText(sessionId)) {
-            // Validate existing session
-            sessionService.getSession(sessionId);
-            return sessionId;
+            try {
+                // Try to get existing session from memory or DB
+                sessionService.getSession(sessionId);
+                return sessionId;
+            } catch (SessionNotFoundException e) {
+                // Session not found in memory or DB, create a new session
+                Session newSession = sessionService.createSession();
+                return newSession.getSessionId();
+            }
         } else {
             // Create new session
             Session newSession = sessionService.createSession();
